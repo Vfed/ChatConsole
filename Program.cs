@@ -24,7 +24,7 @@ namespace ChatConsole
             HttpResponseMessage response = await client.GetAsync(client.BaseAddress + "api/chatuser/find?Username=name");
             if (response.IsSuccessStatusCode)
             {
-                chatUser = await response.Content.ReadAsAsync<ChatUser>();
+                chatUser =await response.Content.ReadAsAsync<ChatUser>();
             }
             return chatUser;
         }

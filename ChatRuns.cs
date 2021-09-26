@@ -14,22 +14,50 @@ namespace ChatConsole
         static async Task<ChatUser> GetChatUserAsync(string name)
         {
             ChatUser chatUser = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/find?Username={name}");
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/find?Username="+name);
             if (response.IsSuccessStatusCode)
             {
                 chatUser = await response.Content.ReadAsAsync<ChatUser>();
             }
             return chatUser;
         }
-        static async Task<Uri> CreateChatUserAsync(string name)
+        static async Task<List<ChatUser>> GetAllUsersAsync()
         {
-            HttpResponseMessage response = await client.PostAsJsonAsync(
-                "api/chatuser/add", new { Username = name });
+            List<ChatUser> chatUsers = null;
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/");
+            if (response.IsSuccessStatusCode)
+            {
+                chatUsers = await response.Content.ReadAsAsync<List<ChatUser>>();
+            }
+            return chatUsers;
+        }
+        static async Task<List<ChatUser>> GetChatUsersExeptMeAsync(string name)
+        {
+            List<ChatUser> chatUser = null;
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/getallexeptme?Username=" + name);
+            if (response.IsSuccessStatusCode)
+            {
+                chatUser = await response.Content.ReadAsAsync<List<ChatUser>>();
+            }
+            return chatUser;
+        }
+        static async Task<Uri> CreateUserAsync(string user)
+        {
+            HttpResponseMessage response = await client.PostAsJsonAsync("api/chatuser/add", new { Username = user });
             response.EnsureSuccessStatusCode();
-
-            // return URI of the created resource.
+            // return URI of the created resource.;
             return response.Headers.Location;
         }
+
+        static async Task<Uri> CreateChatAsync(Guid Id1, Guid Id2)
+        {
+            HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/add", new{UserId1 = Id1, UserId2 =Id2});
+            response.EnsureSuccessStatusCode();
+            // return URI of the created resource.;
+            return response.Headers.Location;
+        }
+
+
         public static async Task RunAsync()
         {
             // Update port # in the following line.
@@ -37,27 +65,113 @@ namespace ChatConsole
             client.DefaultRequestHeaders.Accept.Clear();
             client.DefaultRequestHeaders.Accept.Add(
                 new MediaTypeWithQualityHeaderValue("application/json"));
-            try
+            try 
             {
+                Console.WriteLine("Enter name");
+                //string name = Console.ReadLine().Trim();
 
-                // Create a new product
-                //ChatUserDto dto = new ChatUserDto();
-                //dto.Username = "Victorio";
-                var url = await CreateChatUserAsync("Victorio");
-                //Console.WriteLine($"Created at {url}");
+                ChatUser user1 = await GetChatUserAsync("Gor");
+                if (user1 is ChatUser) { Console.WriteLine("True"); } else { Console.WriteLine("False"); }
 
-                // Get the product
-                ChatUser chatUser = await GetChatUserAsync("Victorio");
-                if (chatUser != null)
-                {
-                    Console.WriteLine(chatUser.Id);
-                }
+                ChatUser user2 = await GetChatUserAsync("Kong");
+                if (user2 is ChatUser) { Console.WriteLine("True"); } else { Console.WriteLine("False"); }
+
+                var url = await CreateChatAsync(user1.Id,user2.Id);
+                Console.WriteLine(url);
+                Console.ReadLine();
+                // ++++ Get User ++++
+
+                //ChatUser user = await GetChatUserAsync(name);
+                //if (user is ChatUser){Console.WriteLine(user.Id);}else{Console.WriteLine(user);}
+
+                // ++++ Get the ExeptMeName ++++
+
+                //List<ChatUser> users = await GetChatUsersExeptMeAsync(name);
+                //if (users != null){foreach (var item in users){Console.WriteLine(item.Username);}}
+
+                // ++++ Post CreateUser ++++
+
+                //var url = await CreateUserAsync(name);
+                //Console.WriteLine(url);
+
+                //++++ Get the AllUsersName++++
+
+                //List<ChatUser> users = await GetAllUsersAsync();
+                //if (users != null) { foreach (var item in users) { Console.WriteLine(item.Username); } }
+
 
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
             }
+            //try
+            //{
+            //    string path1 = "http://localhost:5000/api/chatuser/";
+            //    string path2 = "http://localhost:5000/api/chat/";
+            //    string path3 = "http://localhost:5000/api/message/";
+            //    ChatUser chatUser = new ChatUser();
+            //    bool chkName = false;
+            //    string error = "";
+            //    string name = "";
+            //    //Start
+            //    do
+            //    {
+
+            //        Console.Clear();
+            //        if (error.Length > 0)
+            //        {
+            //            Console.ForegroundColor = ConsoleColor.Red;
+            //            Console.WriteLine(error);
+            //            Console.ResetColor();
+            //            error = "";
+            //        }
+            //        Console.Write("Enter Your Name :");
+            //        name = Console.ReadLine().Trim();
+            //        if (name.Length > 3) 
+            //        {
+            //            chatUser = await GetChatUserAsync(name);
+            //            if (chatUser != null)
+            //            {
+            //                Console.WriteLine(chatUser.Id);
+            //                chkName = true;
+            //            }
+            //            else
+            //            {
+            //                string question = "";
+            //                do
+            //                {
+            //                    Console.Clear();
+            //                    if (question != "")
+            //                    {
+            //                        Console.ForegroundColor = ConsoleColor.Red;
+            //                        Console.WriteLine("");
+            //                        Console.ResetColor();
+            //                    }
+            //                    Console.WriteLine("This User in not exist creat new user ? (Yes/No)");
+            //                    question = Console.ReadLine();
+            //                } while (question != "Yes" && question != "No");
+            //                if (question == "Yes")
+            //                {
+            //                    var stringTask = client.GetStringAsync(path1 + "add?Username=" + name);
+            //                    Console.WriteLine(stringTask);
+
+            //                    //var streamTask1 = client.GetStreamAsync(path1 + "add?Username=" + name);
+            //                    //var user1 = await JsonSerializer.DeserializeAsync<ChatUser>(await streamTask1);
+
+            //                    chkName = true;
+            //                }
+            //            }
+            //        }
+            //    } while (true);
+            //        // Create a new product
+            //ChatUserDto dto = new ChatUserDto();
+            //dto.Username = "Victorio";
+            //var url = await CreateChatUserAsync("Victorio");
+            //Console.WriteLine($"Created at {url}");
+
+            // Get the product
+
             //ChatUser chatUser = new ChatUser();
             //string path1 = "http://localhost:5000/api/chatuser/";
             //string path2 = "http://localhost:5000/api/chat/";
@@ -165,7 +279,7 @@ namespace ChatConsole
             //{
             //    Console.WriteLine(chatUser.Id + " " + chatUser.Username + " " + chatUser.Chats);
             //}
-            Console.ReadKey();
+            //Console.ReadKey();
         }
 
         //static async Task<ChatUser> GetUserAsync(string path)

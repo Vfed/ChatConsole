@@ -14,8 +14,7 @@ namespace ChatConsole
     {
         static async Task Main(string[] args)
         {
-            ChatRuns chatRuns = new ChatRuns();
-            chatRuns.RunAsync().GetAwaiter().GetResult(); ;
+            ChatRuns.RunAsync().GetAwaiter().GetResult(); ;
         }
     }
 }

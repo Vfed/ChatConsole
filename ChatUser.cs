@@ -16,6 +16,7 @@ namespace ChatConsole
         public Guid Id { get; set; }
         public ChatUser ChatUser { get; set; }
         public Chat Chat { get; set; }
+        public DateTime Current { get; set; }
     }
 
     class Chat 

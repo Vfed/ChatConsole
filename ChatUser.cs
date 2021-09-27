@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ChatConsole
 {
-    class ChatUser
+    class ChatUser 
     {
         public Guid Id { get; set; }
         public string Username { get; set; }

@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Linq;
 
 namespace ChatConsole
 {
@@ -12,11 +13,36 @@ namespace ChatConsole
     {
         private static readonly HttpClient client = new HttpClient();
 
+        static async Task<Uri> AddNewUserToChatAsync(Guid userId, Guid chatId)
+        {
+            HttpResponseMessage response = await client.PostAsJsonAsync("api/chatslist/add",new {UserId = userId, ChatId = chatId });
+            response.EnsureSuccessStatusCode();
+            return response.Headers.Location;
+        }
+        static async Task<List<ChatUser>> GetChatUsersAsync( Guid chatId)
+        {
+            List<ChatUser> chatUsers = new List<ChatUser>();
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chat/getchatusers?chatId={chatId}");
+            if (response.IsSuccessStatusCode)
+            {
+                chatUsers = await response.Content.ReadAsAsync<List<ChatUser>>();
+            }
+            return chatUsers;
+        }
+        static async Task<DateTime> GetCurrentDateTimeAsync(Guid userId, Guid chatId)
+        {
+            DateTime date = DateTime.MinValue;
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatslist/gettime?userId=" + userId+"&chatId="+chatId);
+            if (response.IsSuccessStatusCode)
+            {
+                date = await response.Content.ReadAsAsync<DateTime>();
+            }
+            return date;
+        }
         static async Task<Uri> ChangeChatNameAsync(string chatName,Guid chatId)
         {
             HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/chatname", new { ChatName = chatName, ChatId = chatId});
             response.EnsureSuccessStatusCode();
-            // return URI of the created resource.;
             return response.Headers.Location;
         }
         static async Task<Uri> CreateMessageAsync(Guid chatId,string userName,string massege)
@@ -25,10 +51,10 @@ namespace ChatConsole
             response.EnsureSuccessStatusCode();
             return response.Headers.Location;
         }
-        static async Task<List<Message>> GetChatMassagesAsync(Guid ChatId)
+        static async Task<List<Message>> GetChatMassagesAsync(Guid ChatId,Guid userId,DateTime date)
         {
             List<Message> messages = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/massege/get?ChatId="+ChatId);
+            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/massege/get?ChatId={ChatId}&userId={userId}&date={date}");
             if (response.IsSuccessStatusCode)
             {
                 messages = await response.Content.ReadAsAsync<List<Message>>();
@@ -79,20 +105,17 @@ namespace ChatConsole
         {
             HttpResponseMessage response = await client.PostAsJsonAsync("api/chatuser/add", new { Username = user });
             response.EnsureSuccessStatusCode();
-            // return URI of the created resource.;
             return response.Headers.Location;
         }
         static async Task<Uri> CreateChatAsync(Guid Id1, Guid Id2)
         {
             HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/add", new { UserId1 = Id1, UserId2 = Id2 });
             response.EnsureSuccessStatusCode();
-            // return URI of the created resource.;
             return response.Headers.Location;
         }
         
         public static async Task RunAsync()
         {
-            // Update port # in the following line.
             client.BaseAddress = new Uri("http://localhost:5000/");
             client.DefaultRequestHeaders.Accept.Clear();
             client.DefaultRequestHeaders.Accept.Add(
@@ -200,12 +223,16 @@ namespace ChatConsole
                                 Console.WriteLine("Chose a chat (Write a number to enter):");
                                 foreach (Chat item in chats)
                                 {
+                                    DateTime date = await GetCurrentDateTimeAsync(chatUser.Id, item.ChatId);
+                                    if (date < item.LastData )
+                                        Console.ForegroundColor = ConsoleColor.Green;
                                     Console.WriteLine($"{i}. {item.ChatName}");
+                                    Console.ResetColor();
                                     i++;
                                 }
                                 Console.WriteLine($"{i} to Exit");
                                 getNumChk = Int32.TryParse(Console.ReadLine(), out getNum);
-                                if (getNum > 0 && getNum < i && getNumChk)
+                                if (getNum > 0 && getNum < chats.Count+1 && getNumChk)
                                 {
                                     currentChat = chats[getNum-1];
                                 }
@@ -213,8 +240,9 @@ namespace ChatConsole
                                 {
                                     getNumChk = false;
                                 }
-                                if (getNum == i) break;
+                                if (getNum == chats.Count+1) break;
                             } while (!getNumChk);
+
                         }
                     }
                     if (choiseChat == "2")
@@ -269,19 +297,35 @@ namespace ChatConsole
                                 Console.ResetColor();
                             }
                             Console.WriteLine($"User : ( {chatUser.Username} )\n");
+                            List<ChatUser> chatUsers = await GetChatUsersAsync(currentChat.ChatId);
+                            Console.Write("Chat Users : ");
+                            
+                            for (int i = 0; i <= chatUsers.Count -2 ; i++)
+                            {
+                                Console.Write($"{chatUsers[i].Username},");
+                            }
+                            if (chatUsers.Count - 1 > 0)
+                            {
+                                Console.WriteLine(chatUsers[chatUsers.Count - 1].Username);
+                            }
                             Console.WriteLine($"Chat {currentChat.ChatName} (chose an action):");
+                            DateTime date = await GetCurrentDateTimeAsync(chatUser.Id, currentChat.ChatId);
+                            if (date < currentChat.LastData)
+                                Console.ForegroundColor = ConsoleColor.Green;
                             Console.WriteLine("1. Show Messages");
+                            Console.ResetColor();
                             Console.WriteLine("2. Write Messages");
                             Console.WriteLine("3. Change Chat Name");
-                            //Console.WriteLine("4. Add new User to Chat");
-                            Console.WriteLine("4. Exit Chat");
+                            Console.WriteLine("4. Add new User to Chat");
+                            Console.WriteLine("5. Exit Chat");
                             chatAction = Console.ReadLine();
                             Console.Clear();
                             switch (chatAction)
                             {   
                                 
                                 case "1":
-                                    List<Message> messages = await GetChatMassagesAsync(currentChat.ChatId);
+                                    List<Message> messages = await GetChatMassagesAsync(currentChat.ChatId,chatUser.Id,DateTime.Now);
+                                    messages = messages.OrderBy(x => x.CurrentTime).ToList();
                                     foreach (Message item in messages)
                                     {
                                         if (item.UserName == chatUser.Username)
@@ -333,11 +377,44 @@ namespace ChatConsole
                                         }
                                     } while (!chkChangeName && chatName !="\\Exit");
                                     break;
+                                case "4":
+                                    string newUserError = "";
+                                    string newUserName = "";
+                                    bool chkNewUser = false;
+                                    do
+                                    {
+                                        Console.Clear();
+                                        Console.ForegroundColor = ConsoleColor.Red;
+                                        Console.Write(newUserError);
+                                        newUserError = "";
+                                        Console.ResetColor();
+                                        chatError = "";
+                                        Console.WriteLine($"Enter a Name of User you want to Add or(\\Exit): ");
+                                        newUserName = Console.ReadLine().Trim();
+                                        if (newUserName.Length > 3 && newUserName != "\\Exit")
+                                        {
+                                            ChatUser newChatUser = await GetChatUserAsync(newUserName);
+                                            if (newChatUser != null)
+                                            {
+                                                var uri = await AddNewUserToChatAsync(newChatUser.Id, currentChat.ChatId);
+                                            }
+                                            else
+                                            {
+                                                chatNameError = $"No User found with name {newUserName} Enter;\n";
+                                            }
+                                            chkNewUser = true;
+                                        }
+                                        else
+                                        {
+                                            chatNameError = "Wrong Enter;\n";
+                                        }
+                                    } while (!chkNewUser && newUserName != "\\Exit");
+                                    break;
                                 default:
                                     chatError = "Wrong Enter;";
                                     break;
                             }
-                        } while (chatAction != "4");
+                        } while (chatAction != "5");
                     }
                     //Chat Exit;
                 } while (choiseChat != "3");

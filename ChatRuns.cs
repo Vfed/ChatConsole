@@ -4,12 +4,21 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace ChatConsole
 {
     class ChatRuns
     {
         private static readonly HttpClient client = new HttpClient();
+
+        static async Task<Uri> ChangeChatNameAsync(string chatName,Guid chatId)
+        {
+            HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/chatname", new { ChatName = chatName, ChatId = chatId});
+            response.EnsureSuccessStatusCode();
+            // return URI of the created resource.;
+            return response.Headers.Location;
+        }
         static async Task<Uri> CreateMessageAsync(Guid chatId,string userName,string massege)
         {
             HttpResponseMessage response = await client.PostAsJsonAsync("api/massege/add", new { ChatId = chatId, UserName = userName, Massege = massege, CurrentTime = DateTime.Now });
@@ -90,36 +99,6 @@ namespace ChatConsole
                 new MediaTypeWithQualityHeaderValue("application/json"));
             try
             {
-                Console.WriteLine("Enter name");
-                //string name = Console.ReadLine().Trim();
-                ChatUser user1 = await GetChatUserAsync("Gor");
-                if (user1 is ChatUser) { Console.WriteLine("True"); } else { Console.WriteLine("False"); }
-                ChatUser user2 = await GetChatUserAsync("Kong");
-                if (user2 is ChatUser) { Console.WriteLine("True"); } else { Console.WriteLine("False"); }
-                var url = await CreateChatAsync(user1.Id, user2.Id);
-                Console.WriteLine(url);
-                Console.ReadLine();
-
-                // ++++ Get User ++++
-
-                //ChatUser user = await GetChatUserAsync(name);
-                //if (user is ChatUser){Console.WriteLine(user.Id);}else{Console.WriteLine(user);}
-
-                // ++++ Get the ExeptMeName ++++
-
-                //List<ChatUser> users = await GetChatUsersExeptMeAsync(name);
-                //if (users != null){foreach (var item in users){Console.WriteLine(item.Username);}}
-
-                // ++++ Post CreateUser ++++
-
-                //var url = await CreateUserAsync(name);
-                //Console.WriteLine(url);
-
-                //++++ Get the AllUsersName++++
-
-                //List<ChatUser> users = await GetAllUsersAsync();
-                //if (users != null) { foreach (var item in users) { Console.WriteLine(item.Username); } }
-
                 Chat currentChat;
                 string name = "";
                 ChatUser chatUser = new ChatUser();
@@ -180,15 +159,14 @@ namespace ChatConsole
                 do
                 {
                     currentChat = null;
-                    //1 Enter chat
-                    //2 Start new chat
-                    //3 Exit
-                    //Chat Choise
                     do
                     {
+                        Console.Clear();
+                        Console.WriteLine($"User : ( {chatUser.Username} )\n");
                         Console.WriteLine("Chose an action (Write a number):");
                         Console.WriteLine("1. Enter Chat;");
                         Console.WriteLine("2. Start a new Chat;");
+                        Console.WriteLine("3. Exit");
                         choiseChat = Console.ReadLine();
                         switch (choiseChat)
                         {
@@ -206,9 +184,7 @@ namespace ChatConsole
                                 error += "Wrong Enter !";
                                 break;
                         }
-                    }
-
-                    while (!choiseChatChk);
+                    }while (!choiseChatChk);
                     if (choiseChat == "1")
                     {
                         List<Chat> chats = await GetUserChatsAsync(chatUser.Id);
@@ -220,6 +196,7 @@ namespace ChatConsole
                             {
                                 Console.Clear();
                                 int i = 1;
+                                Console.WriteLine($"User : ( {chatUser.Username} )\n");
                                 Console.WriteLine("Chose a chat (Write a number to enter):");
                                 foreach (Chat item in chats)
                                 {
@@ -228,14 +205,15 @@ namespace ChatConsole
                                 }
                                 Console.WriteLine($"{i} to Exit");
                                 getNumChk = Int32.TryParse(Console.ReadLine(), out getNum);
-                                if (getNum > 0 && getNum <= i && getNumChk)
+                                if (getNum > 0 && getNum < i && getNumChk)
                                 {
-                                    currentChat = chats[getNum];
+                                    currentChat = chats[getNum-1];
                                 }
                                 else
                                 {
                                     getNumChk = false;
                                 }
+                                if (getNum == i) break;
                             } while (!getNumChk);
                         }
                     }
@@ -248,6 +226,7 @@ namespace ChatConsole
                         {
                             newChatUser = null;
                             Console.Clear();
+                            Console.WriteLine($"User : ( {chatUser.Username} )\n");
                             Console.WriteLine("Write a User Name to start a chat with or \\Exit :");
                             newChatUserName = Console.ReadLine();
                             if (newChatUserName != "\\Exit")
@@ -275,6 +254,7 @@ namespace ChatConsole
                             Console.ReadKey();
                         }
                     }
+
                     if (currentChat != null) 
                     {
                         string chatError = "";
@@ -288,22 +268,18 @@ namespace ChatConsole
                                 Console.WriteLine(chatError);
                                 Console.ResetColor();
                             }
+                            Console.WriteLine($"User : ( {chatUser.Username} )\n");
                             Console.WriteLine($"Chat {currentChat.ChatName} (chose an action):");
                             Console.WriteLine("1. Show Messages");
                             Console.WriteLine("2. Write Messages");
-                            Console.WriteLine("3. Exit Chat");
+                            Console.WriteLine("3. Change Chat Name");
+                            //Console.WriteLine("4. Add new User to Chat");
+                            Console.WriteLine("4. Exit Chat");
                             chatAction = Console.ReadLine();
                             Console.Clear();
                             switch (chatAction)
                             {   
-                                case "2":
-                                    Console.WriteLine($"Enter massage : ({chatUser.Username})");
-                                    string massage = Console.ReadLine().Trim();
-                                    if (massage.Length > 0)
-                                    {
-                                        var uri = await CreateMessageAsync(currentChat.ChatId, chatUser.Username, massage);
-                                    }
-                                    break;
+                                
                                 case "1":
                                     List<Message> messages = await GetChatMassagesAsync(currentChat.ChatId);
                                     foreach (Message item in messages)
@@ -322,14 +298,47 @@ namespace ChatConsole
                                         }
                                         Console.WriteLine(item.Massege);
                                     }
+                                    Console.ReadKey();
+                                    break;
+                                case "2":
+                                    Console.WriteLine($"Enter massage : ({chatUser.Username})");
+                                    string massage = Console.ReadLine().Trim();
+                                    if (massage.Length > 0)
+                                    {
+                                        var uri = await CreateMessageAsync(currentChat.ChatId, chatUser.Username, massage);
+                                    }
+                                    break;
+                                case "3":
+                                    string chatNameError = "";
+                                    string chatName = "";
+                                    bool chkChangeName = false;
+                                    do
+                                    {
+                                        Console.Clear();
+                                        Console.ForegroundColor = ConsoleColor.Red;
+                                        Console.Write(chatNameError);
+                                        chatNameError = "";
+                                        Console.ResetColor();
+                                        chatError = "";
+                                        Console.WriteLine($"Enter New Chat Name or(\\Exit): ");
+                                        chatName = Console.ReadLine().Trim();
+                                        if (chatName.Length > 5 && chatName != "\\Exit")
+                                        {
+                                            var uri = await ChangeChatNameAsync(chatName, currentChat.ChatId);
+                                            chkChangeName = true;
+                                        }
+                                        else
+                                        {
+                                            chatNameError = "Wrong Enter;\n";
+                                        }
+                                    } while (!chkChangeName && chatName !="\\Exit");
                                     break;
                                 default:
                                     chatError = "Wrong Enter;";
                                     break;
                             }
-                        } while (chatAction != "3");
+                        } while (chatAction != "4");
                     }
-
                     //Chat Exit;
                 } while (choiseChat != "3");
             }
@@ -338,106 +347,5 @@ namespace ChatConsole
                 Console.WriteLine(e.Message);
             }
         }
-        //static async Task<ChatUser> GetUserAsync(string path)
-        //{
-        //    ChatUser user = null;
-        //    HttpResponseMessage response = await client.GetAsync(path);
-        //    if (response.IsSuccessStatusCode)
-        //    {
-        //        user = await response.Content.ReadAsAsync<ChatUser>();
-        //    }
-        //    return user;
-        //}
-        //static void Main(string[] args)
-        //        {
-        //            //RunAsync().GetAwaiter().GetResult();
-
-        //        }
-        //static HttpClient client = new HttpClient();
-        //static void ShowUsers(User user)
-        //{
-        //    Console.WriteLine($"\tId: {user.Id}\tName: {user.Username}\tAge: " +
-        //        $"{user.Age}");
-        //}
-        //static async Task<Uri> CreateProductAsync(User user)
-        //{
-        //    HttpResponseMessage response = await client.PostAsJsonAsync("api/user/", user);
-        //    response.EnsureSuccessStatusCode();
-
-        //    // return URI of the created resource.
-        //    return response.Headers.Location;
-        //}
-        //static async Task<User> GetUserAsync(string path)
-        //{
-        //    User user = null;
-        //    HttpResponseMessage response = await client.GetAsync(path+);
-        //    if (response.IsSuccessStatusCode)
-        //    {
-        //        user = await response.Content.ReadAsAsync<User>();
-        //    }
-        //    return user;
-        //}
-
-        //static async Task<User> UpdateUserAsync(User user)
-        //{
-        //    HttpResponseMessage response = await client.PutAsJsonAsync(
-        //        $"api/user/{user.Id}", user);
-        //    response.EnsureSuccessStatusCode();
-
-        //    // Deserialize the updated product from the response body.
-        //    user = await response.Content.ReadAsAsync<User>();
-        //    return user;
-        //}
-
-        //static async Task<HttpStatusCode> DeleteProductAsync(string id)
-        //{
-        //    HttpResponseMessage response = await client.DeleteAsync(
-        //        $"api/user/{id}");
-        //    return response.StatusCode;
-        //}
-
-
-
-        //static async Task RunAsync()
-        //{
-        //    // Update port # in the following line.
-        //    client.BaseAddress = new Uri("http://localhost:5000/");
-        //    client.DefaultRequestHeaders.Accept.Clear();
-        //    client.DefaultRequestHeaders.Accept.Add(
-        //        new MediaTypeWithQualityHeaderValue("application/json"));
-
-        //    try
-        //    {
-        //        Console.WriteLine("Enter your name :");
-        //        string name = Console.ReadLine();
-
-        //        //var url = await CreateProductAsync(user);
-        //        //Console.WriteLine($"Created at {url}");
-
-        //        // Get the product
-        //        User user = await GetUserAsync(url.PathAndQuery);
-        //        ShowUser(user);
-
-        //        //// Update the product
-        //        //Console.WriteLine("Updating price...");
-        //        //product.Price = 80;
-        //        //await UpdateProductAsync(product);
-
-        //        //// Get the updated product
-        //        //product = await GetProductAsync(url.PathAndQuery);
-        //        //ShowProduct(product);
-
-        //        //// Delete the product
-        //        //var statusCode = await DeleteProductAsync(product.Id);
-        //        //Console.WriteLine($"Deleted (HTTP Status = {(int)statusCode})");
-
-        //    }
-        //    catch (Exception e)
-        //    {
-        //        Console.WriteLine(e.Message);
-        //    }
-
-        //    Console.ReadLine();
-        //}
     }
 }

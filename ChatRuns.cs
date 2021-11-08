@@ -9,111 +9,13 @@ using System.Linq;
 
 namespace ChatConsole
 {
-    class ChatRuns
+    
+    partial class ChatRuns
     {
         private static readonly HttpClient client = new HttpClient();
+        private static string _token { get; set; }
+        private static ChatUser chatUser { get; set; }
 
-        static async Task<Uri> AddNewUserToChatAsync(Guid userId, Guid chatId)
-        {
-            HttpResponseMessage response = await client.PostAsJsonAsync("api/chatslist/add",new {UserId = userId, ChatId = chatId });
-            response.EnsureSuccessStatusCode();
-            return response.Headers.Location;
-        }
-        static async Task<List<ChatUser>> GetChatUsersAsync( Guid chatId)
-        {
-            List<ChatUser> chatUsers = new List<ChatUser>();
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chat/getchatusers?chatId={chatId}");
-            if (response.IsSuccessStatusCode)
-            {
-                chatUsers = await response.Content.ReadAsAsync<List<ChatUser>>();
-            }
-            return chatUsers;
-        }
-        static async Task<DateTime> GetCurrentDateTimeAsync(Guid userId, Guid chatId)
-        {
-            DateTime date = DateTime.MinValue;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatslist/gettime?userId=" + userId+"&chatId="+chatId);
-            if (response.IsSuccessStatusCode)
-            {
-                date = await response.Content.ReadAsAsync<DateTime>();
-            }
-            return date;
-        }
-        static async Task<Uri> ChangeChatNameAsync(string chatName,Guid chatId)
-        {
-            HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/chatname", new { ChatName = chatName, ChatId = chatId});
-            response.EnsureSuccessStatusCode();
-            return response.Headers.Location;
-        }
-        static async Task<Uri> CreateMessageAsync(Guid chatId,string userName,string massege)
-        {
-            HttpResponseMessage response = await client.PostAsJsonAsync("api/massege/add", new { ChatId = chatId, UserName = userName, Massege = massege, CurrentTime = DateTime.Now });
-            response.EnsureSuccessStatusCode();
-            return response.Headers.Location;
-        }
-        static async Task<List<Message>> GetChatMassagesAsync(Guid ChatId,Guid userId,DateTime date)
-        {
-            List<Message> messages = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/massege/get?ChatId={ChatId}&userId={userId}&date={date}");
-            if (response.IsSuccessStatusCode)
-            {
-                messages = await response.Content.ReadAsAsync<List<Message>>();
-            }
-            return messages;
-        }
-        static async Task<List<Chat>> GetUserChatsAsync(Guid UserId)
-        {
-            List<Chat> chats = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chat/get?UserId=" + UserId);
-            if (response.IsSuccessStatusCode)
-            {
-                chats = await response.Content.ReadAsAsync<List<Chat>>();
-            }
-            return chats;
-        }
-        static async Task<ChatUser> GetChatUserAsync(string name)
-        {
-            ChatUser chatUser = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/find?Username="+name);
-            if (response.IsSuccessStatusCode)
-            {
-                chatUser = await response.Content.ReadAsAsync<ChatUser>();
-            }
-            return chatUser;
-        }
-        static async Task<List<ChatUser>> GetAllUsersAsync()
-        {
-            List<ChatUser> chatUsers = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/");
-            if (response.IsSuccessStatusCode)
-            {
-                chatUsers = await response.Content.ReadAsAsync<List<ChatUser>>();
-            }
-            return chatUsers;
-        }
-        static async Task<List<ChatUser>> GetChatUsersExeptMeAsync(string name)
-        {
-            List<ChatUser> chatUser = null;
-            HttpResponseMessage response = await client.GetAsync(client.BaseAddress + $"api/chatuser/getallexeptme?Username=" + name);
-            if (response.IsSuccessStatusCode)
-            {
-                chatUser = await response.Content.ReadAsAsync<List<ChatUser>>();
-            }
-            return chatUser;
-        }
-        static async Task<Uri> CreateUserAsync(string user)
-        {
-            HttpResponseMessage response = await client.PostAsJsonAsync("api/chatuser/add", new { Username = user });
-            response.EnsureSuccessStatusCode();
-            return response.Headers.Location;
-        }
-        static async Task<Uri> CreateChatAsync(Guid Id1, Guid Id2)
-        {
-            HttpResponseMessage response = await client.PostAsJsonAsync("api/chat/add", new { UserId1 = Id1, UserId2 = Id2 });
-            response.EnsureSuccessStatusCode();
-            return response.Headers.Location;
-        }
-        
         public static async Task RunAsync()
         {
             client.BaseAddress = new Uri("http://localhost:5000/");
@@ -124,9 +26,11 @@ namespace ChatConsole
             {
                 Chat currentChat;
                 string name = "";
+                string password = "";
                 ChatUser chatUser = new ChatUser();
-                bool chkName = false;
+                bool chkLogin = false;
                 string error = "";
+
                 // User Init
                 do
                 {
@@ -140,43 +44,68 @@ namespace ChatConsole
                     }
                     Console.Write("Enter Your Name :");
                     name = Console.ReadLine().Trim();
+                    Console.Write("Enter Password :");
+                    password = Console.ReadLine().Trim();
                     if (name.Length < 3)
                     {
                         error += "Name can`t be shorter then 3 symbols";
                     }
                     else
-                    {
-                        chatUser = await GetChatUserAsync(name);
-                        if (chatUser != null)
+                    { 
+                        bool chatUserExist = await GetChatUserExistAsync(name);
+                        if (chatUserExist) //Login to existing user
                         {
-                            //Check if user is exists
-                            Console.WriteLine(chatUser.Id);
-                            chkName = true;
+                            AccessToken accessToken = await LoginUserAsync(new ChatUserLoginDto { Username = name, Password = password });
+                            if (accessToken == null)
+                            {
+                                error += "Can`t login Error !!!\n";
+                            }
+                            else
+                            {
+                                _token = accessToken.Token;
+                                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                                chatUser = await GetChatUserAsync(new ChatUserDto { Username = name });
+                                chkLogin = true;
+                            }
                         }
-                        else
-                        {
-                            string question = "";
+                        else {  //Add new User s Login to it
+                            bool newUserCreateQnEnterd = false;
                             do
                             {
                                 Console.Clear();
-                                if (question != "")
+                                Console.WriteLine($"User \"{name}\" don`t exist;");
+                                Console.WriteLine($"Create new User \"{name}\"?(yes/no)");
+                                string newUserCreateQn = Console.ReadLine();
+                                switch (newUserCreateQn) 
                                 {
-                                    Console.ForegroundColor = ConsoleColor.Red;
-                                    Console.WriteLine("Wrong Enter");
-                                    Console.ResetColor();
+                                    case "yes":
+                                        var userCreated = await CreateUserAsync(new ChatUserLoginDto { Username = name, Password = password });
+                                        AccessToken accessToken = await LoginUserAsync(new ChatUserLoginDto { Username = name, Password = password });
+                                        if (accessToken == null) 
+                                        {
+                                            error += "Can`t login Error !!!\n";
+                                        }
+                                        else
+                                        {
+                                            _token = accessToken.Token;
+                                            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                                            chatUser = await GetChatUserAsync(new ChatUserDto { Username = name });
+
+                                            chkLogin = true;
+                                        }
+                                        newUserCreateQnEnterd = true;
+                                        break;
+                                    case "no":
+                                        newUserCreateQnEnterd = true;
+                                        break;
                                 }
-                                Console.WriteLine("This User in not exist creat new user ? (Yes/No)");
-                                question = Console.ReadLine();
-                            } while (question != "Yes" && question != "No");
-                            if (question == "Yes")
-                            {
-                                await CreateUserAsync(name);
-                                chatUser = await GetChatUserAsync(name);
-                                chkName = true;
-                            }
+                            } while (!newUserCreateQnEnterd);
                         }
                     }
-                } while (!chkName);
+                } while (!chkLogin);
+                
+
+
                 bool choiseChatChk = false;
                 string choiseChat = "";
                 do
@@ -208,6 +137,7 @@ namespace ChatConsole
                                 break;
                         }
                     }while (!choiseChatChk);
+
                     if (choiseChat == "1")
                     {
                         List<Chat> chats = await GetUserChatsAsync(chatUser.Id);
@@ -224,7 +154,7 @@ namespace ChatConsole
                                 foreach (Chat item in chats)
                                 {
                                     DateTime date = await GetCurrentDateTimeAsync(chatUser.Id, item.ChatId);
-                                    if (date < item.LastData )
+                                    if (date < item.LastData)
                                         Console.ForegroundColor = ConsoleColor.Green;
                                     Console.WriteLine($"{i}. {item.ChatName}");
                                     Console.ResetColor();
@@ -232,18 +162,24 @@ namespace ChatConsole
                                 }
                                 Console.WriteLine($"{i} to Exit");
                                 getNumChk = Int32.TryParse(Console.ReadLine(), out getNum);
-                                if (getNum > 0 && getNum < chats.Count+1 && getNumChk)
+                                if (getNum > 0 && getNum < chats.Count + 1 && getNumChk)
                                 {
-                                    currentChat = chats[getNum-1];
+                                    currentChat = chats[getNum - 1];
                                 }
                                 else
                                 {
                                     getNumChk = false;
                                 }
-                                if (getNum == chats.Count+1) break;
+                                if (getNum == chats.Count + 1) break;
                             } while (!getNumChk);
 
                         }
+                        else 
+                        {
+                            Console.WriteLine("There are no active chats");
+                            Console.ReadLine();
+                        }
+                        
                     }
                     if (choiseChat == "2")
                     {
@@ -259,7 +195,7 @@ namespace ChatConsole
                             newChatUserName = Console.ReadLine();
                             if (newChatUserName != "\\Exit")
                             {
-                                newChatUser = await GetChatUserAsync(newChatUserName);
+                                newChatUser = await GetChatUserAsync(new ChatUserDto { Username = newChatUserName });
                                 if (newChatUserName != null)
                                 {
 
@@ -393,7 +329,7 @@ namespace ChatConsole
                                         newUserName = Console.ReadLine().Trim();
                                         if (newUserName.Length > 3 && newUserName != "\\Exit")
                                         {
-                                            ChatUser newChatUser = await GetChatUserAsync(newUserName);
+                                            ChatUser newChatUser = await GetChatUserAsync(new ChatUserDto { Username = newUserName });
                                             if (newChatUser != null)
                                             {
                                                 var uri = await AddNewUserToChatAsync(newChatUser.Id, currentChat.ChatId);
